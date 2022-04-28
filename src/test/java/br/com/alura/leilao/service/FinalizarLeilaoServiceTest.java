@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -27,6 +28,9 @@ public class FinalizarLeilaoServiceTest {
     @Mock
     private LeilaoDao leilaoDao;
 
+    @Mock
+    private EnviadorDeEmails enviadorDeEmails;
+
     private List<Leilao> leiloes() {
         List<Leilao> lista = new ArrayList<>();
 
@@ -45,7 +49,7 @@ public class FinalizarLeilaoServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.initMocks(this);
-        finalizarLeilaoService = new FinalizarLeilaoService(leilaoDao);
+        finalizarLeilaoService = new FinalizarLeilaoService(leilaoDao, enviadorDeEmails);
     }
 
     @Test
@@ -61,6 +65,37 @@ public class FinalizarLeilaoServiceTest {
         assertEquals(new BigDecimal("900"), leilao.getLanceVencedor().getValor());
         assertTrue(leilao.isFechado());
         verify(leilaoDao).salvar(any(Leilao.class));
+    }
+
+    @Test
+    void deveEnviarEmailParaVencedorDoLeilao() {
+        List<Leilao> leiloes = leiloes();
+
+        when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
+
+        finalizarLeilaoService.finalizarLeiloesExpirados();
+
+        Leilao leilao = leiloes.get(0);
+        Lance lanceVencedor = leilao.getLanceVencedor();
+
+        verify(enviadorDeEmails).enviarEmailVencedorLeilao(lanceVencedor);
+    }
+
+    @Test
+    void naoDeveEnviarEmailParaVencedorDoLeilaoEmCasooDeErro() {
+
+        List<Leilao> leiloes = leiloes();
+
+        when(leilaoDao.buscarLeiloesExpirados()).thenReturn(leiloes);
+        when(leilaoDao.salvar(any(Leilao.class))).thenThrow(RuntimeException.class);
+
+        try {
+            finalizarLeilaoService.finalizarLeiloesExpirados();
+        } catch (Exception e) {
+
+        }
+
+        verifyNoInteractions(enviadorDeEmails);
     }
 
 }
